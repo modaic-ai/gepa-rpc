@@ -1,6 +1,6 @@
 import { test, expect } from "bun:test";
-import { GEPA, GEPANode, Dataset, type MetricFunction } from "gepa-rpc";
-import { Predict } from "gepa-rpc/ai-sdk";
+import { GEPA, Program, Dataset, type MetricFunction } from "gepa-rpc";
+import { Prompt } from "gepa-rpc/ai-sdk";
 import { openai } from "@ai-sdk/openai";
 import { Output } from "ai";
 import * as fs from "node:fs";
@@ -47,14 +47,14 @@ test("GEPA optimization on support ticket labeling", async () => {
 
   const trainset = new Dataset(data, { ticket: "ticket" });
 
-  // 2. Implement the GEPANode and forward function
+  // 2. Implement the Program and forward function
   const initialPrompt = "Classify the support ticket into a category.";
-  const node = new GEPANode({
-    classifier: new Predict(initialPrompt),
+  const program = new Program({
+    classifier: new Prompt(initialPrompt),
   });
 
   async function forward(inputs: { ticket: string }): Promise<string> {
-    const result = await (node.classifier as Predict).generateText({
+    const result = await (program.classifier as Prompt).generateText({
       model: openai("gpt-4o-mini"),
       prompt: `Ticket: ${inputs.ticket}`,
       output: Output.choice({
@@ -72,7 +72,7 @@ test("GEPA optimization on support ticket labeling", async () => {
     return result.output as string;
   }
 
-  node.setForward(forward);
+  program.setForward(forward);
 
   // 3. Define Metric
   const metric: MetricFunction = (example, prediction) => {
@@ -101,9 +101,9 @@ test("GEPA optimization on support ticket labeling", async () => {
   console.log("Starting GEPA optimization...");
   // We wrap this in a try-catch because the python backend might not be available in this environment
   try {
-    const optimizedNode = await gepa.compile(node, metric, trainset);
+    const optimizedNode = await gepa.compile(program, metric, trainset);
 
-    const finalPrompt = (optimizedNode.classifier as Predict).systemPrompt;
+    const finalPrompt = (optimizedNode.classifier as Prompt).systemPrompt;
 
     // 5. Verify prompt changes
     console.log("Initial Prompt:", initialPrompt);
@@ -115,11 +115,11 @@ test("GEPA optimization on support ticket labeling", async () => {
     optimizedNode.save(savePath);
     expect(fs.existsSync(savePath)).toBe(true);
 
-    const newNode = new GEPANode({
-      classifier: new Predict(initialPrompt),
+    const newNode = new Program({
+      classifier: new Prompt(initialPrompt),
     });
     newNode.load(savePath);
-    expect((newNode.classifier as Predict).systemPrompt).toBe(finalPrompt);
+    expect((newNode.classifier as Prompt).systemPrompt).toBe(finalPrompt);
 
     // Cleanup
     fs.unlinkSync(savePath);

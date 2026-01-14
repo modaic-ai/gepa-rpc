@@ -1,13 +1,13 @@
 // example ticket classifier. Using the subclass API.
-import { GEPANode, type MetricFunction } from "gepa-rpc";
-import { Predict } from "gepa-rpc/ai-sdk";
+import { Program, type MetricFunction } from "gepa-rpc";
+import { Prompt } from "gepa-rpc/ai-sdk";
 import { openai } from "@ai-sdk/openai";
 import { Output } from "ai";
 
-class MyAgent extends GEPANode {
+class MyAgent extends Program {
   constructor() {
     super({
-      judge: new Predict(
+      judge: new Prompt(
         "Read the question and determine which response is better. If A is better respond with A>B if B is better respond with B>A."
       ),
     });
@@ -19,7 +19,7 @@ class MyAgent extends GEPANode {
     response_B: string;
   }): Promise<string> {
     const prompt = `Question: ${inputs.question}\n\nResponse A: ${inputs.response_A}\n\nResponse B: ${inputs.response_B}\n\n`;
-    const result = await (this.judge as Predict).generateText({
+    const result = await (this.judge as Prompt).generateText({
       model: openai("gpt-4o-mini"),
       prompt: prompt,
       output: Output.choice({
@@ -30,7 +30,7 @@ class MyAgent extends GEPANode {
   }
 }
 
-const node = new MyAgent();
+const program = new MyAgent();
 
 const metric: MetricFunction = async (example, prediction) => {
   const expected = example.label === "A>B" ? "A" : "B";

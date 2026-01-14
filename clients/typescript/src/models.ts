@@ -79,7 +79,7 @@ interface FinalizeRequest {
   results: any;
 }
 
-export interface Predict {
+export interface Prompt {
   name: string;
   systemPrompt: string;
 }

@@ -8,12 +8,12 @@ import {
   type Output,
 } from "ai";
 import { requestContext } from "../gepa";
-import type { Predict as PredictInterface } from "../models";
+import type { Prompt as PromptInterface } from "../models";
 
 type GenerateTextOptions = Parameters<typeof generateText>[0];
 type StreamTextOptions = Parameters<typeof streamText>[0];
 
-export class Predict implements PredictInterface {
+export class Prompt implements PromptInterface {
   systemPrompt: string;
   name: string = "";
 
@@ -25,7 +25,7 @@ export class Predict implements PredictInterface {
     if (options.messages) {
       if (options.messages.some((m: any) => m.role === "system")) {
         throw new Error(
-          "System messages are not allowed in Predict. Provide them via systemPrompt instead."
+          "System messages are not allowed in Prompt. Provide them via systemPrompt instead."
         );
       }
       return [

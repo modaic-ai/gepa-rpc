@@ -16,7 +16,7 @@ import type {
   ReflectiveExample,
   FeedbackFunction,
   MetricFunction,
-  Predict,
+  Prompt,
 } from "./models";
 
 export const requestContext = new AsyncLocalStorage<{
@@ -139,14 +139,14 @@ export class GEPA {
   }
 
   async compile(
-    node: GEPANode,
+    program: Program,
     metric: MetricFunction,
     dataset: Dataset,
     valset?: Dataset
-  ): Promise<GEPANode> {
+  ): Promise<Program> {
     this.metric = metric;
     this.dataset = dataset;
-    const server = createServer(this, node);
+    const server = createServer(this, program);
     const port = 8000;
 
     await server.listen({ port, host: "0.0.0.0" });
@@ -160,7 +160,7 @@ export class GEPA {
     };
 
     if (this.options.auto) {
-      const numPreds = Object.keys(node._predictors).length;
+      const numPreds = Object.keys(program._predictors).length;
       const numCandidates = AUTO_RUN_SETTINGS[this.options.auto].n;
       const valsetSize = valset ? valset.data.length : dataset.data.length;
       this.options.max_metric_calls = this.calculateAutoBudget(
@@ -187,9 +187,9 @@ export class GEPA {
       const datasetPath = dataset.toFile(logDir);
       const valsetPath = valset ? valset.toFile(logDir) : datasetPath;
 
-      // 2. Prepare seed candidate from node predictors
+      // 2. Prepare seed candidate from program predictors
       const seedCandidate: Record<string, string> = {};
-      for (const [name, predictor] of Object.entries(node._predictors)) {
+      for (const [name, predictor] of Object.entries(program._predictors)) {
         seedCandidate[name] = predictor.systemPrompt;
       }
 
@@ -237,14 +237,14 @@ export class GEPA {
         });
 
         optimizationPromise.then(({ bestCandidate, results }) => {
-          // Update node with best candidate
+          // Update program with best candidate
           for (const [name, prompt] of Object.entries(bestCandidate)) {
-            if (node._predictors[name]) {
-              node._predictors[name].systemPrompt = prompt;
+            if (program._predictors[name]) {
+              program._predictors[name].systemPrompt = prompt;
             }
           }
           console.log("Optimization completed via /finalize callback.");
-          resolve(node);
+          resolve(program);
         });
 
         pythonProcess.on("close", (code) => {
@@ -337,13 +337,13 @@ export class GEPA {
   }
 }
 
-export class GEPANode<Input = any, Output = any> {
+export class Program<Input = any, Output = any> {
   [key: string]: any;
   private _forward?: (input: Input) => Promise<Output>;
-  _predictors: Record<string, Predict>;
+  _predictors: Record<string, Prompt>;
 
   constructor(
-    predictors: Record<string, Predict>,
+    predictors: Record<string, Prompt>,
     forward?: (input: Input) => Promise<Output>
   ) {
     this._predictors = predictors;
@@ -354,9 +354,9 @@ export class GEPANode<Input = any, Output = any> {
     this._forward = forward;
   }
 
-  clone(): GEPANode<Input, Output> {
+  clone(): Program<Input, Output> {
     const clonedPredictors = JSON.parse(JSON.stringify(this._predictors));
-    return new GEPANode(clonedPredictors, this.forward);
+    return new Program(clonedPredictors, this.forward);
   }
 
   save(filePath: string): void {

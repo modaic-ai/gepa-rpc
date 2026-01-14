@@ -12,7 +12,7 @@
   "types": "./src/index.ts",
   "exports": {
     ".": "./src/index.ts",
-    "./ai-sdk": "./src/ai-sdk/predict.ts"
+    "./ai-sdk": "./src/ai-sdk/prompt.ts"
   },
   "devDependencies": {
     "@types/bun": "latest"

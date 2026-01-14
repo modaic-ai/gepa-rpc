@@ -1,18 +1,18 @@
-import { GEPA, GEPANode, Dataset, type MetricFunction } from "gepa-rpc";
-import { Predict } from "gepa-rpc/ai-sdk";
+import { GEPA, Program, Dataset, type MetricFunction } from "gepa-rpc";
+import { Prompt } from "gepa-rpc/ai-sdk";
 import { openai } from "@ai-sdk/openai";
 import { Output } from "ai";
 console.log("GEPA_RPC_DEV env variable:", process.env.GEPA_RPC_DEV);
 
-class TicketClassifier extends GEPANode<{ ticket: string }, string> {
+class TicketClassifier extends Program<{ ticket: string }, string> {
   constructor() {
     super({
-      classifier: new Predict("Classify the support ticket into a category."),
+      classifier: new Prompt("Classify the support ticket into a category."),
     });
   }
 
   async forward(inputs: { ticket: string }): Promise<string> {
-    const result = await (this.classifier as Predict).generateText({
+    const result = await (this.classifier as Prompt).generateText({
       model: openai("gpt-4o-mini"),
       prompt: `Ticket: ${inputs.ticket}`,
       output: Output.choice({
@@ -95,7 +95,7 @@ const data = [
 ];
 
 const trainset = new Dataset(data, ["ticket"]);
-const node = new TicketClassifier();
+const program = new TicketClassifier();
 
 const gepa = new GEPA({
   numThreads: 2,
@@ -104,10 +104,10 @@ const gepa = new GEPA({
 });
 
 console.log("Starting optimization...");
-const optimizedNode = await gepa.compile(node, metric, trainset);
+const optimizedNode = await gepa.compile(program, metric, trainset);
 
 optimizedNode.save("tickets_classifier.json");
 console.log(
   "Optimized Prompt:",
-  (optimizedNode.classifier as Predict).systemPrompt
+  (optimizedNode.classifier as Prompt).systemPrompt
 );

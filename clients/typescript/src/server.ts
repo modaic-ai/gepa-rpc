@@ -1,5 +1,5 @@
 import Fastify from "fastify";
-import type { GEPA, GEPANode } from "./gepa";
+import type { GEPA, Program } from "./gepa";
 import type {
   Example,
   EvaluateRequest,
@@ -7,7 +7,7 @@ import type {
   FinalizeRequest,
 } from "./models";
 
-export function createServer(gepa: GEPA, node: GEPANode) {
+export function createServer(gepa: GEPA, program: Program) {
   const fastify = Fastify({
     connectionTimeout: 0, // time to receive full request
     keepAliveTimeout: 0, // keep-alive between requests
@@ -27,7 +27,7 @@ export function createServer(gepa: GEPA, node: GEPANode) {
       return;
     }
 
-    const response = await node.evaluate(
+    const response = await program.evaluate(
       batch,
       candidate,
       capture_traces,

@@ -1,5 +1,5 @@
-import { GEPA, GEPANode, Dataset, type MetricFunction } from "gepa-rpc";
-import { Predict } from "gepa-rpc/ai-sdk";
+import { GEPA, Program, Dataset, type MetricFunction } from "gepa-rpc";
+import { Prompt } from "gepa-rpc/ai-sdk";
 import { openai } from "@ai-sdk/openai";
 import { Output } from "ai";
 
@@ -10,8 +10,8 @@ const trainset = new Dataset("examples/ai_sdk/judge_bench_train.jsonl", [
   "label",
 ]);
 
-const node = new GEPANode({
-  judge: new Predict(
+const program = new Program({
+  judge: new Prompt(
     "Read the question and determine which response is better. If A is better respond with A>B if B is better respond with B>A."
   ),
 });
@@ -22,7 +22,7 @@ async function forward(inputs: {
   response_B: string;
 }): Promise<string> {
   const prompt = `Question: ${inputs.question}\n\nResponse A: ${inputs.response_A}\n\nResponse B: ${inputs.response_B}\n\n`;
-  const result = await (node.judge as Predict).generateText({
+  const result = await (program.judge as Prompt).generateText({
     model: openai("gpt-4o-mini"),
     prompt: prompt,
     output: Output.choice({
@@ -32,7 +32,7 @@ async function forward(inputs: {
   return result.output;
 }
 
-node.setForward(forward);
+program.setForward(forward);
 
 const metric: MetricFunction = (example, prediction) => {
   const isCorrect = example.label === prediction.output;
@@ -47,6 +47,6 @@ const gepa = new GEPA({
   auto: "medium",
   reflection_lm: "openai/gpt-4o",
 });
-const optimizedNode = await gepa.compile(node, metric, trainset);
+const optimizedNode = await gepa.compile(program, metric, trainset);
 
-console.log("Optimized Prompt:", (optimizedNode.judge as Predict).systemPrompt);
+console.log("Optimized Prompt:", (optimizedNode.judge as Prompt).systemPrompt);

@@ -1,0 +1,9 @@
+{
+  "name": "examples-ai-sdk",
+  "private": true,
+  "dependencies": {
+    "gepa-rpc": "workspace:*",
+    "@ai-sdk/openai": "3.0.0",
+    "ai": "^6.0.27"
+  }
+}

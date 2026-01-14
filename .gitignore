@@ -18,3 +18,5 @@ dspy/
 .gepa_run/
 
 artifacts/
+
+node_modules/

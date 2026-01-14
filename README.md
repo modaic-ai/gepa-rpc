@@ -24,9 +24,9 @@ uv tool install gepa-rpc
 
 ## Core Concepts
 
-- `Predict` is a wrapper for your AI client. (AI SDK in this case). It allows you to call `generateText`/ `streamText` how you normally would but it dynamically the system prompt for optimization.
+- `Prompt` is a wrapper for your AI client. (AI SDK in this case). It allows you to call `generateText`/ `streamText` how you normally would but it dynamically the system prompt for optimization.
 
-- `GEPANode` tracks all the `Predict` components in your system and is the entry point for gepa prompt optimization.
+- `Program` tracks all the `Prompt` components in your system and is the entry point for gepa prompt optimization.
 - `Dataset` is a wrapper for your training data. It allows you to load your data from a JSONL file or an array of objects.
 - `MetricFunction` is a function that you define that scores traces of your system's execution.
 - `GEPA` is the optimizer. It uses the gepa-rpc cli to run the gepa engine and propose new prompts for optimization.
@@ -53,30 +53,30 @@ const trainset = new Dataset(
 );
 ```
 
-### 2. Define Your System (`GEPANode`)
+### 2. Define Your System (`Program`)
 
-A `GEPANode` tracks optimized system prompts for each AI component in your system. It automatically injects the correct system prompt for a component when you call
-`node.<predictor_name>.generateText()`
+A `Program` tracks optimized system prompts for each AI component in your system. It automatically injects the correct system prompt for a component when you call
+`program.<predictor_name>.generateText()`
 
 #### Class-Based Approach
 
 Shorthand approach with better type safety. (recommended)
 
 ```typescript
-import { GEPANode } from "gepa-rpc";
-import { Predict } from "gepa-rpc/ai-sdk";
+import { Program } from "gepa-rpc";
+import { Prompt } from "gepa-rpc/ai-sdk";
 import { openai } from "@ai-sdk/openai";
 import { Output } from "ai";
 
-class TicketClassifier extends GEPANode<{ ticket: string }, string> {
+class TicketClassifier extends Program<{ ticket: string }, string> {
   constructor() {
     super({
-      classifier: new Predict("Classify the support ticket into a category."),
+      classifier: new Prompt("Classify the support ticket into a category."),
     });
   }
 
   async forward(inputs: { ticket: string }): Promise<string> {
-    const result = await (this.classifier as Predict).generateText({
+    const result = await (this.classifier as Prompt).generateText({
       model: openai("gpt-4o-mini"),
       prompt: `Ticket: ${inputs.ticket}`,
       output: Output.choice({
@@ -87,39 +87,39 @@ class TicketClassifier extends GEPANode<{ ticket: string }, string> {
   }
 }
 
-const node = new TicketClassifier();
+const program = new TicketClassifier();
 ```
 
 #### Functional Approach
 
-Ideal for retrofitting an existing system. You can use a global GEPANode object and replace `generateText`/ `streamText` calls with `node.predictor.generateText` / `node.predictor.streamText`.
+Ideal for retrofitting an existing system. You can use a global Program object and replace `generateText`/ `streamText` calls with `program.predictor.generateText` / `program.predictor.streamText`.
 
 ```typescript
-// gepa-node.ts
-import { GEPANode } from "gepa-rpc";
-import { Predict } from "gepa-rpc/ai-sdk";
+// program.ts
+import { Program } from "gepa-rpc";
+import { Prompt } from "gepa-rpc/ai-sdk";
 import { openai } from "@ai-sdk/openai";
 import { choose } from "./logic";
 
-const node = new GEPANode({
-  judge: new Predict(
+const program = new Program({
+  judge: new Prompt(
     "Determine which response is better. Respond with A>B or B>A."
   ),
 });
 
-export default node;
+export default program;
 ```
 
 ```typescript
 // logic.ts
-import node from "./gepa-node";
+import program from "./program";
 
 const choose = async (
   question: string,
   response_A: string,
   response_B: string
 ) => {
-  const result = await node.judge.generateText({
+  const result = await program.judge.generateText({
     model: openai("gpt-4o-mini"),
     prompt: `Question: ${question}\nA: ${response_A}\nB: ${response_B}`,
     output: Output.choice({
@@ -133,10 +133,10 @@ const choose = async (
 ```typescript
 // optimize.ts
 import { GEPA } from "gepa-rpc";
-import node from "./gepa-node";
+import program from "./program";
 import { choose } from "./logic";
 
-node.setForward(
+program.setForward(
   async (inputs: {
     question: string;
     response_A: string;
@@ -181,25 +181,25 @@ const gepa = new GEPA({
   reflection_lm: "openai/gpt-4o", // Strong model used for reflection
 });
 
-const optimizedNode = await gepa.compile(node, metric, trainset);
+const optimizedProgram = await gepa.compile(program, metric, trainset);
 
 console.log(
   "Optimized Prompt:",
-  (optimizedNode.classifier as Predict).systemPrompt
+  (optimizedProgram.classifier as Prompt).systemPrompt
 );
 ```
 
 ### 5. Persistence
 
-You can save and load the state of your `GEPANode` (the optimized prompts) to JSON files.
+You can save and load the state of your `Program` (the optimized prompts) to JSON files.
 
 ```typescript
 // Save the optimized state
-optimizedNode.save("./optimized_prompts.json");
+optimizedProgram.save("./optimized_prompts.json");
 
 // Load it back later
-const productionNode = new TicketClassifier();
-productionNode.load("./optimized_prompts.json");
+const productionProgram = new TicketClassifier();
+productionProgram.load("./optimized_prompts.json");
 ```
 
 ---
