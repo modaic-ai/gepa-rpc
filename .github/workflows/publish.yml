@@ -6,6 +6,7 @@ on:
 
 permissions:
   contents: read
+  id-token: write # Required for OIDC
 
 jobs:
   build-python:
@@ -60,8 +61,7 @@ jobs:
       - name: Set version
         run: npm version ${{ github.event.release.tag_name }} --no-git-tag-version
         working-directory: clients/typescript
-
-      - run: bun install
+      - run: bun install --frozen-lockfile
         working-directory: clients/typescript
       - run: bun run build
         working-directory: clients/typescript
