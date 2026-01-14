@@ -10,3 +10,11 @@ wheels/
 .venv
 
 .env
+
+**/scratch/
+
+dspy/
+
+.gepa_run/
+
+artifacts/

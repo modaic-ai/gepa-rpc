@@ -1,54 +1,17 @@
 # Copyright (c) 2025 Lakshya A Agrawal and the GEPA contributors
 # https://github.com/gepa-ai/gepa
 
+from gepa_rpc.models import Prediction
+
+
 import requests
-from collections.abc import Mapping, Sequence
-from typing import Any, Optional, Protocol, TypedDict
 
-from gepa.core.adapter import EvaluationBatch, GEPAAdapter
+from gepa.core.adapter import GEPAAdapter, EvaluationBatch
 
-# DataInst, Trajectory, RolloutOutput
-Example = dict[str, Any]
-Prediction = dict[str, Any]
+from .models import Example, Trace, Prediction, ReflectiveExample
 
 
-class TraceData(TypedDict):
-    example_ind: int
-    example: Example
-    prediction: Prediction
-    trace: list[tuple[Any, dict[str, Any], Prediction]]
-    score: float | None
-
-
-class ReflectiveExample(TypedDict):
-    """
-    Structure of individual examples in the reflective dataset.
-
-    Each example contains the predictor inputs, generated outputs, and feedback from evaluation.
-    """
-
-    Inputs: dict[str, Any]  # Predictor inputs (may include str, dspy.Image, etc.)
-    Generated_Outputs: (
-        dict[str, Any] | str
-    )  # Success: dict with output fields, Failure: error message string
-    Feedback: str  # Always a string - from metric function or parsing error message
-
-
-class ScoreWithFeedback(TypedDict):
-    score: float
-    feedback: Optional[str]
-
-
-class ChatMessage(TypedDict):
-    role: str
-    content: str
-
-
-class ChatCompletionCallable(Protocol):
-    def __call__(self, messages: Sequence[ChatMessage]) -> str: ...
-
-
-class RPCAdapter(GEPAAdapter[Example, TraceData, Prediction]):
+class RPCAdapter(GEPAAdapter[Example, Trace, Prediction]):
     """
     A GEPA Adapter that forwards calls to a remote server (e.g., a TypeScript server)
     via HTTP. This allows you to implement your system logic in any language.
@@ -62,13 +25,10 @@ class RPCAdapter(GEPAAdapter[Example, TraceData, Prediction]):
         batch: list[Example],
         candidate: dict[str, str],
         capture_traces: bool = False,
-    ) -> EvaluationBatch[TraceData, Prediction]:
+    ) -> EvaluationBatch[Trace, Prediction]:
         """
         Forward evaluation request to the remote server.
         """
-        print("batch", batch)
-        print("candidate", candidate)
-        print("capture_traces", capture_traces)
         response = requests.post(
             f"{self.base_url}/evaluate",
             json={
@@ -80,18 +40,14 @@ class RPCAdapter(GEPAAdapter[Example, TraceData, Prediction]):
         response.raise_for_status()
         data = response.json()
 
-        return EvaluationBatch(
-            outputs=data["outputs"],
-            scores=data["scores"],
-            trajectories=data.get("trajectories"),
-        )
+        return EvaluationBatch[Trace, Prediction](**data)
 
     def make_reflective_dataset(
         self,
         candidate: dict[str, str],
-        eval_batch: EvaluationBatch[TraceData, Prediction],
+        eval_batch: EvaluationBatch[Trace, Prediction],
         components_to_update: list[str],
-    ) -> Mapping[str, Sequence[Mapping[str, Any]]]:
+    ) -> dict[str, list[ReflectiveExample]]:
         """
         Forward reflective dataset construction request to the remote server.
         """

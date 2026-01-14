@@ -1,10 +1,9 @@
-import os
 from typing import Any, Dict, List
 from pydantic import BaseModel, Field
-from langchain.agents import create_agent
-from langchain.agents.structured_output import ToolStrategy
 from typing import Literal
-from langchain.agents.middleware import dynamic_prompt, ModelRequest
+import instructor
+from gepa_rpc.models import Example, Prediction, Trace, ScoreWithFeedback
+from typing import Optional
 
 with open("tests/labels.txt", "r") as f:
     labels = [line.strip() for line in f if line.strip()]
@@ -12,24 +11,13 @@ with open("tests/labels.txt", "r") as f:
 
 # Define the structured output schema
 class ClassificationResult(BaseModel):
-    category: Literal[labels] = Field(
+    category: Literal[*labels] = Field(
         description="The category that best describes the input text."
     )
 
 
-class Context(BaseModel):
-    system_prompt: str
-
-
-@dynamic_prompt
-def dynamic_system_prompt(request: ModelRequest) -> str:
-    """Generate system prompt based on user role."""
-    system_prompt = request.runtime.context.system_prompt
-    return system_prompt
-
-
-class LangchainAdapter:
-    def __init__(self, starter_prompt: str, model_name: str = "gpt-4o-mini"):
+class InstructorAdapter:
+    def __init__(self, starter_prompt: str, model_name: str = "openai/gpt-4o-mini"):
         """
         Initializes the LangchainAdapter.
 
@@ -40,13 +28,7 @@ class LangchainAdapter:
         self.starter_prompt = starter_prompt
         self.system_prompt = starter_prompt
         self.model_name = model_name
-        self.agent = create_agent(
-            model=self.model_name,
-            system_prompt=self.system_prompt,
-            response_format=ToolStrategy(ClassificationResult),
-            middleware=[dynamic_system_prompt],
-            context_schema=Context,
-        )
+        self.client = instructor.from_provider(self.model_name)
 
     def __call__(self, text: str) -> Dict[str, Any]:
         """
@@ -60,29 +42,40 @@ class LangchainAdapter:
         """
         # Assuming invoke might be async or sync depending on implementation;
         # using a common pattern for async agents if needed.
-        result = self.agent.invoke(
-            {"messages": [{"role": "user", "content": text}]},
-            context={"system_prompt": self.system_prompt},
+        result = self.client.create(
+            response_model=ClassificationResult,
+            messages=[
+                {
+                    "role": "system",
+                    "content": self.system_prompt,
+                },
+                {
+                    "role": "user",
+                    "content": text,
+                },
+            ],
         )
-        print("result", result)
-
-        # Return the dumped base model as a dict
-        if "structured_response" in result:
-            return result["structured_response"].model_dump()
-
-        # Fallback if the expected key is missing
-        return {
-            "category": "error",
-        }
+        return result.model_dump()
 
     def set_system_prompt(self, system_prompt: str):
         self.system_prompt = system_prompt
 
 
 def metric(
-    example: dict[str, Any], prediction: dict[str, Any], trace: list[dict[str, Any]]
-) -> float:
-    return 1.0 if prediction["category"] == example["label_text"] else 0.0
+    example: str,
+    prediction: str,
+    trace: Optional[Trace] = None,
+    pred_name: Optional[str] = None,
+    pred_trace: Optional[Trace] = None,
+) -> float | ScoreWithFeedback:
+    score = 1.0 if prediction["category"] == example["label_text"] else 0.0
+    if trace and pred_name and pred_trace:
+        if prediction["category"] not in labels:
+            return ScoreWithFeedback(
+                score=0.0,
+                feedback=f"Prediction category {prediction['category']} not a valid label",
+            )
+    return score
 
 
 if __name__ == "__main__":
@@ -92,7 +85,7 @@ if __name__ == "__main__":
         labels = [line.strip() for line in f if line.strip()]
 
     load_dotenv()
-    adapter = LangchainAdapter(
+    adapter = InstructorAdapter(
         starter_prompt=f"Classify the following support ticket. Allowed categories: {', '.join(labels)}"
     )
     result = adapter("I need help with my account")

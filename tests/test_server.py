@@ -2,25 +2,19 @@ from fastapi import FastAPI
 from pydantic import BaseModel, Field
 from typing import Any, Optional, Mapping, Sequence
 import uvicorn
-from .langchain import LangchainAdapter
+from .classifier import InstructorAdapter, metric
 from dotenv import load_dotenv
+from gepa_rpc.models import TraceData, Prediction, ReflectiveExample
+from gepa import EvaluationBatch
 
 load_dotenv()
 
 app = FastAPI()
 with open("tests/labels.txt", "r") as f:
     labels = [line.strip() for line in f if line.strip()]
-adapter = LangchainAdapter(
+adapter = InstructorAdapter(
     starter_prompt=f"Classify the following support ticket. Allowed categories: {', '.join(labels)}"
 )
-
-# --- GEPA RPC Models ---
-
-
-class EvaluationBatchModel(BaseModel):
-    outputs: list[Any]
-    scores: list[float]
-    trajectories: Optional[list[Any]] = None
 
 
 class EvaluateRequest(BaseModel):
@@ -29,17 +23,9 @@ class EvaluateRequest(BaseModel):
     capture_traces: bool = False
 
 
-class ReflectiveExample(BaseModel):
-    Inputs: dict[str, Any]
-    Generated_Outputs: Any = Field(alias="Generated Outputs")
-    Feedback: str
-
-    model_config = {"populate_by_name": True}
-
-
 class MakeReflectiveDatasetRequest(BaseModel):
     candidate: dict[str, str]
-    eval_batch: EvaluationBatchModel
+    eval_batch: EvaluationBatch[TraceData, Prediction]
     components_to_update: list[str]
 
 
@@ -47,9 +33,9 @@ class MakeReflectiveDatasetRequest(BaseModel):
 
 
 @app.post("/evaluate")
-async def evaluate(request: EvaluateRequest) -> EvaluationBatchModel:
+async def evaluate(request: EvaluateRequest) -> EvaluationBatch:
     """
-    Evaluates the LangChain classification agent.
+    Evaluates the Instructor classification agent.
     - request.candidate['classifier_prompt'] is the system prompt to optimize.
     - request.batch is a list of support tickets to classify.
     """
@@ -64,10 +50,10 @@ async def evaluate(request: EvaluateRequest) -> EvaluationBatchModel:
 
     for item in request.batch:
         ticket_text = item.get("text", "")
-        expected_category = item.get("label", "")  # For scoring
+        expected_category = item.get("label_text", "")  # For scoring
 
         # Run the classification via the adapter's __call__
-        result_dict = await adapter(ticket_text)
+        result_dict = adapter(ticket_text)
 
         # Scoring: 1.0 if category matches expectation
         # result_dict matches the ClassificationResult schema
@@ -84,7 +70,7 @@ async def evaluate(request: EvaluateRequest) -> EvaluationBatchModel:
             # We construct a minimal trajectory since __call__ returns only the result dict
             trajectories.append({"input": ticket_text, "output": result_dict})
 
-    return EvaluationBatchModel(
+    return EvaluationBatch(
         outputs=outputs,
         scores=scores,
         trajectories=trajectories if request.capture_traces else None,
@@ -94,32 +80,43 @@ async def evaluate(request: EvaluateRequest) -> EvaluationBatchModel:
 @app.post("/make_reflective_dataset")
 async def make_reflective_dataset(
     request: MakeReflectiveDatasetRequest,
-) -> Mapping[str, Sequence[ReflectiveExample]]:
+) -> dict[str, list[ReflectiveExample]]:
     """
     Constructs feedback for GEPA to improve the classification system prompt.
     """
     dataset: dict[str, list[ReflectiveExample]] = {}
 
     for component in request.components_to_update:
-        if component == "classifier_prompt":
-            items = []
-            for i, score in enumerate(request.eval_batch.scores):
-                # Simple feedback logic
-                if score < 1.0:
-                    feedback = "The agent misclassified this ticket. It should have been more attentive to keywords related to the category."
-                else:
-                    feedback = "Perfect classification."
+        items = []
+        for i, score in enumerate(request.eval_batch.scores):
+            # Simple feedback logic
+            if score < 1.0:
+                feedback = "The agent misclassified this ticket."
+            else:
+                feedback = "Perfect classification."
 
-                items.append(
-                    ReflectiveExample(
-                        Inputs=request.eval_batch.trajectories[i]["input"]
-                        if request.eval_batch.trajectories
-                        else {"text": "unknown"},
-                        Generated_Outputs=request.eval_batch.outputs[i],
-                        Feedback=feedback,
-                    )
+            metric_result = metric(
+                example=request.eval_batch.trajectories[i].example,
+                prediction=request.eval_batch.outputs[i],
+                trace=request.eval_batch.trajectories[i].trace,
+                pred_name=component,
+                pred_trace=[
+                    t
+                    for t in request.eval_batch.trajectories[i].trace
+                    if t[0] == component
+                ],
+            )
+
+            items.append(
+                ReflectiveExample(
+                    Inputs=request.eval_batch.trajectories[i]["input"]
+                    if request.eval_batch.trajectories
+                    else {"text": "unknown"},
+                    Generated_Outputs=request.eval_batch.outputs[i],
+                    Feedback=feedback,
                 )
-            dataset[component] = items
+            )
+        dataset[component] = items
 
     return dataset
 
