@@ -9,7 +9,7 @@
 </p>
 
 <p align="center">
-  <strong>Automatically optimize your AI prompts using genetic algorithms and Pareto optimization.</strong>
+  <strong>Optimize your Vercel AI SDK agents with GEPA (Genetic-Pareto Optimization).</strong>
 </p>
 
 ---
