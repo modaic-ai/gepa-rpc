@@ -82,6 +82,7 @@ interface FinalizeRequest {
 export interface Prompt {
   name: string;
   systemPrompt: string;
+  _isPrompt: boolean;
 }
 
 export type {

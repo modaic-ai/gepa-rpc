@@ -1,0 +1,10 @@
+{"ticket":"I can't log into my account, it says wrong password.","label":"Login Issue"}
+{"ticket":"My order #12345 hasn't arrived yet. Where is it?","label":"Shipping"}
+{"ticket":"I want to request a refund for the broken item I received.","label":"Refund/Returns"}
+{"ticket":"How do I change my subscription plan?","label":"Billing"}
+{"ticket":"The app keeps crashing whenever I try to upload a photo.","label":"Technical Support"}
+{"ticket":"Is there a discount for bulk orders?","label":"Sales"}
+{"ticket":"I need to update my shipping address for my recent order.","label":"Shipping"}
+{"ticket":"You charged me twice for the same transaction.","label":"Billing"}
+{"ticket":"Can I use this software on multiple devices?","label":"General Inquiry"}
+{"ticket":"I received the wrong size for the shirt I ordered.","label":"Refund/Returns"}

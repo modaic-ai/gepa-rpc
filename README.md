@@ -1,10 +1,99 @@
-# GEPA RPC
+<p align="center">
+  <img src="assets/logo.png" alt="GEPA RPC Logo" width="400">
+</p>
 
-`gepa-rpc` is a standard interface for using GEPA (Genetic-Pareto prompt optimization) in any language or framework via remote calls to the GEPA engine. We also ship clients for specific frameworks to make integrarion easier. Currently, the only supported client is for the [Vercel AI SDK](https://sdk.vercel.ai/docs).
+<p align="center">
+  <a href="https://www.npmjs.com/package/gepa-rpc"><img src="https://img.shields.io/npm/v/gepa-rpc" alt="npm version"></a>
+  <a href="https://pypi.org/project/gepa-rpc/"><img src="https://img.shields.io/pypi/v/gepa-rpc" alt="PyPI version"></a>
+  <a href="https://github.com/modaic/gepa-rpc/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue" alt="License"></a>
+</p>
+
+<p align="center">
+  <strong>Automatically optimize your AI prompts using genetic algorithms and Pareto optimization.</strong>
+</p>
+
+---
+
+## Why GEPA?
+
+Writing effective prompts is hard. Small wording changes can dramatically affect accuracy, but finding the right phrasing requires tedious trial and error.
+
+**GEPA automates this.** You define a metric (e.g., "did it classify correctly?"), provide training examples, and GEPA evolves your prompts to maximize performance—no manual tuning required.
+
+```
+Before: "Classify the support ticket into a category."           → 72% accuracy
+After:  "You are a support ticket routing system. Analyze the    → 94% accuracy
+         customer's intent and classify into exactly one of
+         the following categories..."
+```
+
+---
+
+## Quick Start
+
+Here's a complete example that optimizes a ticket classifier:
+
+```typescript
+import { Program, Dataset, GEPA, type MetricFunction } from "gepa-rpc";
+import { Prompt } from "gepa-rpc/ai-sdk";
+import { openai } from "@ai-sdk/openai";
+import { Output } from "ai";
+
+// 1. Define your AI system
+class TicketClassifier extends Program<{ ticket: string }, string> {
+  constructor() {
+    super({
+      classifier: new Prompt("Classify the support ticket into a category."),
+    });
+  }
+
+  override async forward(inputs: { ticket: string }): Promise<string> {
+    const result = await this.classifier.generateText({
+      model: openai("gpt-4o-mini"),
+      prompt: `Ticket: ${inputs.ticket}`,
+      output: Output.choice({
+        options: ["Login Issue", "Shipping", "Billing", "General Inquiry"],
+      }),
+    });
+    return result.output as string;
+  }
+}
+
+// 2. Load training data
+const trainset = new Dataset(
+  [
+    { ticket: "I can't log into my account.", label: "Login Issue" },
+    { ticket: "Where is my order #123?", label: "Shipping" },
+    // ... more examples
+  ],
+  ["ticket"]
+);
+
+// 3. Define how to score predictions
+const metric: MetricFunction = (example, prediction) => ({
+  score: example.label === prediction.output ? 1.0 : 0.0,
+  feedback:
+    example.label === prediction.output
+      ? "Correct!"
+      : `Expected "${example.label}", got "${prediction.output}"`,
+});
+
+// 4. Run optimization
+const gepa = new GEPA({ numThreads: 4, auto: "medium" });
+const optimized = await gepa.compile(new TicketClassifier(), metric, trainset);
+
+// 5. Use your optimized program
+optimized.save("./optimized_prompts.json");
+console.log("New prompt:", optimized.classifier.systemPrompt);
+```
+
+---
 
 ## Installation
 
-Install in your ts/js project
+GEPA has two components: a **TypeScript client** for your application and a **CLI** that runs the optimization engine.
+
+### 1. Install the TypeScript client
 
 ```bash
 npm install gepa-rpc
@@ -12,9 +101,9 @@ npm install gepa-rpc
 bun add gepa-rpc
 ```
 
-Install the cli.
-First [install uv](https://docs.astral.sh/uv/getting-started/installation/)
-Then install the gepa-rpc cli
+### 2. Install the CLI
+
+First [install uv](https://docs.astral.sh/uv/getting-started/installation/), then:
 
 ```bash
 uv tool install gepa-rpc
@@ -24,43 +113,41 @@ uv tool install gepa-rpc
 
 ## Core Concepts
 
-- `Prompt` is a wrapper for your AI client. (AI SDK in this case). It allows you to call `generateText`/ `streamText` how you normally would but it dynamically the system prompt for optimization.
+| Concept            | Description                                                                                           |
+| ------------------ | ----------------------------------------------------------------------------------------------------- |
+| **Prompt**         | Wraps your AI calls (`generateText`/`streamText`). Injects the optimized system prompt automatically. |
+| **Program**        | Container for all `Prompt` components in your system. Entry point for optimization.                   |
+| **Dataset**        | Your training data—loaded from JSONL or passed as an array.                                           |
+| **MetricFunction** | Scores each prediction. Returns a score (0-1) and optional feedback for the optimizer.                |
+| **GEPA**           | The optimizer. Spawns the CLI and evolves prompts using Genetic-Pareto optimization.                  |
 
-- `Program` tracks all the `Prompt` components in your system and is the entry point for gepa prompt optimization.
-- `Dataset` is a wrapper for your training data. It allows you to load your data from a JSONL file or an array of objects.
-- `MetricFunction` is a function that you define that scores traces of your system's execution.
-- `GEPA` is the optimizer. It uses the gepa-rpc cli to run the gepa engine and propose new prompts for optimization.
+---
 
-## Usage
+## Detailed Usage
 
-### 1. Setup Your Dataset
-
-Use the `Dataset` class to manage your training data. You can pass a path to a JSONL file or an array of records. The second argument specifies which fields from your dataset should be passed to your system's `forward` function.
+### Loading Data
 
 ```typescript
 import { Dataset } from "gepa-rpc";
 
-// Load from a JSONL file
-const trainset = new Dataset("data/train.jsonl", ["question", "answer"]); // you can also pass in a dict mapping dataset keys to input keys
+// From a JSONL file
+const trainset = new Dataset("data/train.jsonl", ["question", "answer"]);
 
-// Or use an array of objects
+// From an array
 const trainset = new Dataset(
   [
     { ticket: "I can't log into my account.", label: "Login Issue" },
     { ticket: "Where is my order #123?", label: "Shipping" },
   ],
-  ["ticket"] // These fields will be available in the 'forward' function
-);
+  ["ticket"]
+); // Fields passed to forward()
 ```
 
-### 2. Define Your System (`Program`)
+### Defining Your Program
 
-A `Program` tracks optimized system prompts for each AI component in your system. It automatically injects the correct system prompt for a component when you call
-`program.<predictor_name>.generateText()`
+#### Class-Based (Recommended)
 
-#### Class-Based Approach
-
-Shorthand approach with better type safety. (recommended)
+Best for new projects. Provides type safety and clean encapsulation.
 
 ```typescript
 import { Program } from "gepa-rpc";
@@ -75,31 +162,29 @@ class TicketClassifier extends Program<{ ticket: string }, string> {
     });
   }
 
-  async forward(inputs: { ticket: string }): Promise<string> {
-    const result = await (this.classifier as Prompt).generateText({
+  override async forward(inputs: { ticket: string }): Promise<string> {
+    const result = await this.classifier.generateText({
       model: openai("gpt-4o-mini"),
       prompt: `Ticket: ${inputs.ticket}`,
       output: Output.choice({
         options: ["Login Issue", "Shipping", "Billing", "General Inquiry"],
       }),
     });
-    return result.output;
+    return result.output as string;
   }
 }
 
 const program = new TicketClassifier();
 ```
 
-#### Functional Approach
+#### Functional (For Existing Codebases)
 
-Ideal for retrofitting an existing system. You can use a global Program object and replace `generateText`/ `streamText` calls with `program.predictor.generateText` / `program.predictor.streamText`.
+Best for retrofitting GEPA into an existing system. Replace your `generateText`/`streamText` calls with `program.<name>.generateText`.
 
 ```typescript
 // program.ts
 import { Program } from "gepa-rpc";
 import { Prompt } from "gepa-rpc/ai-sdk";
-import { openai } from "@ai-sdk/openai";
-import { choose } from "./logic";
 
 const program = new Program({
   judge: new Prompt(
@@ -113,8 +198,10 @@ export default program;
 ```typescript
 // logic.ts
 import program from "./program";
+import { openai } from "@ai-sdk/openai";
+import { Output } from "ai";
 
-const choose = async (
+export const choose = async (
   question: string,
   response_A: string,
   response_B: string
@@ -122,9 +209,7 @@ const choose = async (
   const result = await program.judge.generateText({
     model: openai("gpt-4o-mini"),
     prompt: `Question: ${question}\nA: ${response_A}\nB: ${response_B}`,
-    output: Output.choice({
-      options: ["A>B", "B>A"],
-    }),
+    output: Output.choice({ options: ["A>B", "B>A"] }),
   });
   return result.output;
 };
@@ -132,26 +217,30 @@ const choose = async (
 
 ```typescript
 // optimize.ts
-import { GEPA } from "gepa-rpc";
+import { GEPA, Dataset } from "gepa-rpc";
 import program from "./program";
 import { choose } from "./logic";
 
-program.setForward(
-  async (inputs: {
-    question: string;
-    response_A: string;
-    response_B: string;
-  }) => {
-    return await choose(inputs.question, inputs.response_A, inputs.response_B);
-  }
-);
+program.setForward(async (inputs) => {
+  return await choose(inputs.question, inputs.response_A, inputs.response_B);
+});
 
-// rest of optimization code..
+const trainset = new Dataset("data/comparisons.jsonl", [
+  "question",
+  "response_A",
+  "response_B",
+]);
+const metric = (example, prediction) => ({
+  score: example.winner === prediction.output ? 1.0 : 0.0,
+});
+
+const gepa = new GEPA({ numThreads: 4, auto: "medium" });
+await gepa.compile(program, metric, trainset);
 ```
 
-### 3. Define Your Metric
+### Writing Metrics
 
-The metric scores performance on a specific example. It can return a simple score or rich feedback to help the optimizer "reflect" on mistakes.
+The metric function scores each prediction. Return a `score` (0-1) and optional `feedback` to help the optimizer understand mistakes.
 
 ```typescript
 import { type MetricFunction } from "gepa-rpc";
@@ -162,42 +251,32 @@ const metric: MetricFunction = (example, prediction) => {
     score: isCorrect ? 1.0 : 0.0,
     feedback: isCorrect
       ? "Correctly labeled."
-      : `Incorrectly labeled. Expected ${example.label} but got ${prediction.output}`,
+      : `Incorrectly labeled. Expected "${example.label}" but got "${prediction.output}"`,
   };
 };
 ```
 
-### 4. Run Optimization
-
-Call `GEPA.compile` to start the optimization process. This spawns a reflective optimization loop where the system tries different prompt variations.
+### Running Optimization
 
 ```typescript
-// optimize.ts
 import { GEPA } from "gepa-rpc";
 
 const gepa = new GEPA({
   numThreads: 4, // Concurrent evaluation workers
-  auto: "medium", // Optimization depth (light, medium, heavy)
-  reflection_lm: "openai/gpt-4o", // Strong model used for reflection
+  auto: "medium", // Optimization depth: "light" | "medium" | "heavy"
+  reflection_lm: "openai/gpt-4o", // Model used for reflection (optional)
 });
 
 const optimizedProgram = await gepa.compile(program, metric, trainset);
-
-console.log(
-  "Optimized Prompt:",
-  (optimizedProgram.classifier as Prompt).systemPrompt
-);
 ```
 
-### 5. Persistence
-
-You can save and load the state of your `Program` (the optimized prompts) to JSON files.
+### Saving & Loading
 
 ```typescript
-// Save the optimized state
+// Save optimized prompts
 optimizedProgram.save("./optimized_prompts.json");
 
-// Load it back later
+// Load in production
 const productionProgram = new TicketClassifier();
 productionProgram.load("./optimized_prompts.json");
 ```
@@ -208,20 +287,20 @@ productionProgram.load("./optimized_prompts.json");
 
 ### Language Support
 
-Currently, the only supported client is the [Vercel AI SDK](https://sdk.vercel.ai/docs). However, the `gepa-rpc` cli can be used with any language or framework. If you would like to have a client for your favorite framework/language, please open an issue or submit a pull request.
+Currently, the only supported client is the [Vercel AI SDK](https://sdk.vercel.ai/docs). The `gepa-rpc` CLI can work with any language or framework—contributions for other clients are welcome!
 
 ### Concurrency
 
-Optimization uses a dynamic worker pool. If you set `numThreads` to 4, the TypeScript client will keep 4 LLM calls in flight simultaneously during evaluation, maximizing throughput.
+Optimization uses a dynamic worker pool. Setting `numThreads: 4` keeps 4 LLM calls in flight simultaneously during evaluation, maximizing throughput.
 
-### Development
+### Local Development
 
-If you are developing `gepa-rpc` locally, you can use the `GEPA_RPC_DEV=true` environment variable to run the CLI from the local source using `uv run` instead of `uvx`.
+To run the CLI from local source instead of the published package:
 
 ```bash
 GEPA_RPC_DEV=true bun run your_optimization_script.ts
 ```
 
-### Network Proocol
+### Network Protocol
 
-Currently, gepa-rpc uses HTTP request to comminicate between the cli and the framework client. We are working on a websocket based protocol for robustness.
+GEPA uses HTTP to communicate between the CLI and the TypeScript client. A WebSocket-based protocol for improved robustness is in development.
