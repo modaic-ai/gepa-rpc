@@ -9,7 +9,7 @@
 </p>
 
 <p align="center">
-  <strong>Optimize your Vercel AI SDK agents with GEPA (Genetic-Pareto Optimization).</strong>
+  <strong>Optimize your Vercel AI SDK agents with GEPA (Genetic-Pareto Prompt Optimization).</strong>
 </p>
 
 ---
