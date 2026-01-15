@@ -1,6 +1,6 @@
 {
   "name": "gepa-rpc",
-  "version": "0.1.0",
+  "version": "0.2.1",
   "description": "Run GEPA on your favorite non-python frameworks.",
   "author": "Tyrin Todd <tyrin@modaic.dev>",
   "license": "MIT",
@@ -23,6 +23,7 @@
   "dependencies": {
     "@ai-sdk/openai": "3.0.0",
     "ai": "^6.0.27",
+    "bumpp": "^10.4.0",
     "fastify": "^5.6.2",
     "nanoid": "^5.1.6",
     "yaml": "^2.8.2",

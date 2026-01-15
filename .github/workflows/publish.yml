@@ -57,9 +57,11 @@ jobs:
           registry-url: "https://registry.npmjs.org"
 
       - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
 
       - name: Set version
-        run: npm version ${{ github.event.release.tag_name }} --no-git-tag-version
+        run: bunx bumpp ${{ github.event.release.tag_name }} --no-push --no-tag --no-commit -y
         working-directory: clients/typescript
       - run: bun install --frozen-lockfile
         working-directory: clients/typescript
