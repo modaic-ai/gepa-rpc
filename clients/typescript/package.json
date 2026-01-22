@@ -8,11 +8,20 @@
     "type": "git",
     "url": "https://github.com/modaic-ai/gepa-rpc"
   },
-  "main": "./src/index.ts",
-  "types": "./src/index.ts",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
   "exports": {
-    ".": "./src/index.ts",
-    "./ai-sdk": "./src/ai-sdk/prompt.ts"
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./ai-sdk": {
+      "types": "./dist/ai-sdk/prompt.d.ts",
+      "default": "./dist/ai-sdk/prompt.js"
+    }
   },
   "devDependencies": {
     "@types/bun": "latest"
@@ -30,6 +39,6 @@
     "zod": "3"
   },
   "scripts": {
-    "build": "tsc --declaration --emitDeclarationOnly && bun build ./src/index.ts --outdir ./dist --target node"
+    "build": "tsc && bun build ./src/index.ts ./src/ai-sdk/prompt.ts --outdir ./dist --target node"
   }
 }

@@ -1,6 +1,6 @@
 import { test, expect } from "bun:test";
 import { GEPA, Program, Dataset, type MetricFunction } from "gepa-rpc";
-import { Prompt } from "gepa-rpc/ai-sdk";
+import { Prompt } from "../src/ai-sdk/prompt";
 import { openai } from "@ai-sdk/openai";
 import { Output } from "ai";
 import * as fs from "node:fs";

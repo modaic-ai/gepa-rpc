@@ -1,0 +1,16 @@
+perfect_score: 1
+skip_perfect_score: true
+use_merge: true
+max_merge_invocations: 5
+candidate_selection_strategy: pareto
+reflection_minibatch_size: 3
+auto: light
+reflection_lm: gpt5.2
+log_dir: /Users/tytodd/Desktop/Modaic/code/libs/gepa-rpc/.gepa_test_run
+max_metric_calls: 420
+trainset: /Users/tytodd/Desktop/Modaic/code/libs/gepa-rpc/.gepa_test_run/dataset.jsonl
+valset: /Users/tytodd/Desktop/Modaic/code/libs/gepa-rpc/.gepa_test_run/dataset.jsonl
+seed_candidate:
+  classifier: Classify the support ticket into a category.
+adapter:
+  base_url: http://localhost:8000

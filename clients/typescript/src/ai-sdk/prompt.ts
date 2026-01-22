@@ -16,6 +16,7 @@ type StreamTextOptions = Parameters<typeof streamText>[0];
 export class Prompt implements PromptInterface {
   systemPrompt: string;
   name: string = "";
+  _isPrompt: boolean = true;
 
   constructor(systemPrompt: string) {
     this.systemPrompt = systemPrompt;
